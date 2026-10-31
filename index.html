@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>حدس عدد</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; background: var(--tg-theme-bg-color, #fff); color: var(--tg-theme-text-color, #000); display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; text-align: center; }
+    h1 { margin-bottom: 10px; }
+    .stats { font-size: 14px; color: var(--tg-theme-hint-color, #666); margin-bottom: 20px; }
+    input { font-size: 24px; padding: 10px; width: 100px; text-align: center; border-radius: 12px; border: 2px solid var(--tg-theme-button-color, #3390ec); background: var(--tg-theme-secondary-bg-color, #f0f0f0); color: var(--tg-theme-text-color, #000); margin-bottom: 20px; outline: none; }
+    button { font-size: 18px; padding: 12px 30px; border-radius: 12px; border: none; background: var(--tg-theme-button-color, #3390ec); color: var(--tg-theme-button-text-color, #fff); cursor: pointer; width: 100%; max-width: 250px; font-weight: bold; }
+    button:active { opacity: 0.8; }
+    button:disabled { opacity: 0.5; }
+    #message { margin-top: 20px; font-size: 18px; font-weight: bold; height: 25px; }
+    .win { color: #4caf50; }
+    .lose { color: #f44336; }
+  </style>
+</head>
+<body>
+  <h1>🎯 حدس عدد</h1>
+  <div class="stats" id="stats">در حال بارگذاری...</div>
+  <div id="game">
+    <p>عددی بین ۱ تا ۱۰۰ حدس بزن:</p>
+    <input type="number" id="guessInput" min="1" max="100" placeholder="؟" />
+    <br /><br />
+    <button id="guessBtn">حدس بزن</button>
+  </div>
+  <div id="message"></div>
+  <script>
+    const tg = window.Telegram.WebApp;
+    tg.expand(); tg.ready();
+    const guessInput = document.getElementById('guessInput');
+    const guessBtn = document.getElementById('guessBtn');
+    const messageEl = document.getElementById('message');
+    const statsEl = document.getElementById('stats');
+
+    function callServerless(action, payload = {}) {
+      return new Promise((resolve, reject) => {
+        tg.Serverless.call('game', { action, ...payload }, (err, result) => {
+          if (err) return reject(err);
+          resolve(result);
+        });
+      });
+    }
+
+    async function startGame() {
+      try {
+        const data = await callServerless('start');
+        statsEl.textContent = `🏆 بهترین رکورد شما: ${data.bestScore ? data.bestScore + ' تلاش' : 'هنوز بازی نکرده‌اید'}`;
+      } catch (e) { statsEl.textContent = 'خطا در ارتباط با سرور'; }
+    }
+
+    async function submitGuess() {
+      const val = parseInt(guessInput.value);
+      if (!val || val < 1 || val > 100) {
+        messageEl.textContent = 'لطفاً عددی بین ۱ تا ۱۰۰ وارد کنید'; messageEl.className = 'lose'; return;
+      }
+      guessBtn.disabled = true; messageEl.textContent = 'در حال بررسی...'; messageEl.className = '';
+
+      try {
+        const res = await callServerless('guess', { guess: val });
+        if (res.status === 'win') {
+          messageEl.textContent = `🎉 برنده شدید! در ${res.attempts} تلاش.` + (res.isNewRecord ? ' (رکورد جدید!)' : '');
+          messageEl.className = 'win'; guessBtn.disabled = true; guessInput.disabled = true;
+          setTimeout(() => { statsEl.textContent = `🏆 بهترین رکورد شما: ${res.bestScore} تلاش`; }, 1000);
+        } else {
+          messageEl.textContent = res.hint; messageEl.className = 'lose';
+          guessInput.value = ''; guessInput.focus(); guessBtn.disabled = false;
+        }
+      } catch (e) {
+        messageEl.textContent = 'خطای شبکه'; messageEl.className = 'lose'; guessBtn.disabled = false;
+      }
+    }
+    guessBtn.addEventListener('click', submitGuess);
+    guessInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') submitGuess(); });
+    startGame();
+  </script>
+</body>
+</html>
